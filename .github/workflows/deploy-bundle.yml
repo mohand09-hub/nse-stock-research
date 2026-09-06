@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. Check out the repository (Updated to modern v4)
+      # 1. Check out the repository (Modern v4 version)
       - name: Checkout code
         uses: actions/checkout@v4
       
@@ -39,7 +39,7 @@ jobs:
         run: |
           databricks bundle deploy --target dev
       
-      # 5. Trigger the market open job after deployment safely using text parsing
+      # 5. Trigger the market open job after deployment safely using text parsing and positional arguments
       - name: Trigger market open job (optional)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -62,4 +62,17 @@ jobs:
           fi
           
           echo "🚀 Found Job ID: $JOB_ID. Triggering run..."
-          databricks jobs run-now --job-id "$JOB_ID"
+          
+          # 4. Execute trigger without the --job-id flag using the required positional argument syntax
+          TRIGGER_RESPONSE=$(databricks jobs run-now "$JOB_ID" 2>&1)
+          TRIGGER_STATUS=$?
+          
+          if [ $TRIGGER_STATUS -ne 0 ]; then
+            echo "❌ Error: Databricks API failed to trigger the job."
+            echo "=== Databricks API Response ==="
+            echo "$TRIGGER_RESPONSE"
+            exit $TRIGGER_STATUS
+          fi
+          
+          echo "✅ Job successfully triggered!"
+          echo "$TRIGGER_RESPONSE"

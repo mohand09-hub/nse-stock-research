@@ -1,0 +1,6 @@
+# Phase 1a: Ingestion + Bronze pipeline
+# Used by ingestion scripts (fetch_prices.py, fetch_news.py)
+# The bronze pipeline (bronze.py) uses pyspark — pre-installed in Databricks runtime.
+yfinance
+feedparser
+requests

@@ -1,0 +1,20 @@
+# ─────────────────────────────────────────────────────────────
+# Databricks Asset Bundle (DAB) — nse-stock-research
+# Phase 1a: Ingestion + Bronze pipeline
+# ─────────────────────────────────────────────────────────────
+
+bundle:
+  name: nse-stock-research
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for all landing/bronze/silver/gold schemas
+    default: nse_stock_research
+
+targets:
+  dev:
+    mode: development
+    default: true

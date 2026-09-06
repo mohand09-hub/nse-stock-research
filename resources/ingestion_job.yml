@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────
+# Ingestion Job Resource — nse-stock-research
+# Phase 1a: Ingestion + Bronze pipeline
+# ─────────────────────────────────────────────────────────────
+# This file defines two scheduled Databricks jobs:
+#   1. nse_market_open  — runs at 9:15 AM IST (market open)
+#   2. nse_market_close — runs at 3:30 PM IST (market close)
+#
+# Each job runs the same task chain:
+#   seed_watchlist → fetch_prices → fetch_news → refresh_pipeline
+#
+# The first three tasks run in parallel (no depends_on between them).
+# They write raw JSON to the landing volume.
+# refresh_pipeline waits for all three to finish, then triggers
+# the SDP pipeline (bronze.py) to load the data into bronze tables.
+#
+# The search index task is omitted in Phase 1a — it will be added
+# in a later phase when the search infrastructure is built.
+# ─────────────────────────────────────────────────────────────
+
+resources:
+  jobs:
+
+    # ── Job 1: Market Open (9:15 AM IST, Mon-Fri) ──
+    nse_market_open:
+      name: nse-market-open
+      schedule:
+        quartz_cron_expression: "0 15 9 ? * MON-FRI"
+        timezone_id: Asia/Kolkata
+        pause_status: UNPAUSED
+
+      tasks:
+        # Task 1: Write the watchlist JSON to the landing volume.
+        # Idempotent — overwrites the same files each run.
+        - task_key: seed_watchlist
+          spark_python_task:
+            python_file: ../ingestion/seed_watchlist.py
+          environment_key: ingestion_env
+
+        # Task 2: Fetch 1-year price history + fundamentals via yfinance.
+        # Writes one JSON file per ticker per day.
+        - task_key: fetch_prices
+          spark_python_task:
+            python_file: ../ingestion/fetch_prices.py
+          environment_key: ingestion_env
+
+        # Task 3: Fetch RSS news from Indian financial feeds.
+        # Writes one JSON file per source per run.
+        - task_key: fetch_news
+          spark_python_task:
+            python_file: ../ingestion/fetch_news.py
+          environment_key: ingestion_env
+
+        # Task 4: Trigger the SDP pipeline to process landed JSON
+        # into bronze tables via Auto Loader.
+        # Runs only after all three ingestion tasks complete.
+        - task_key: refresh_pipeline
+          depends_on:
+            - task_key: seed_watchlist
+            - task_key: fetch_prices
+            - task_key: fetch_news
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.nse_pipeline.id}
+
+      # Environment spec for ingestion tasks.
+      # Dependencies are installed automatically by Databricks.
+      environments:
+        - environment_key: ingestion_env
+          spec:
+            environment_version: '2'
+            dependencies:
+              - yfinance
+              - feedparser
+
+    # ── Job 2: Market Close (3:30 PM IST, Mon-Fri) ──
+    nse_market_close:
+      name: nse-market-close
+      schedule:
+        quartz_cron_expression: "0 30 15 ? * MON-FRI"
+        timezone_id: Asia/Kolkata
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: seed_watchlist
+          spark_python_task:
+            python_file: ../ingestion/seed_watchlist.py
+          environment_key: ingestion_env
+
+        - task_key: fetch_prices
+          spark_python_task:
+            python_file: ../ingestion/fetch_prices.py
+          environment_key: ingestion_env
+
+        - task_key: fetch_news
+          spark_python_task:
+            python_file: ../ingestion/fetch_news.py
+          environment_key: ingestion_env
+
+        - task_key: refresh_pipeline
+          depends_on:
+            - task_key: seed_watchlist
+            - task_key: fetch_prices
+            - task_key: fetch_news
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.nse_pipeline.id}
+
+      environments:
+        - environment_key: ingestion_env
+          spec:
+            environment_version: '2'
+            dependencies:
+              - yfinance
+              - feedparser

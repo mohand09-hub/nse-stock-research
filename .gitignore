@@ -1,0 +1,10 @@
+# Databricks bundle deployment artifacts
+.bundle/
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Databricks
+*.ipynb_checkpoints/

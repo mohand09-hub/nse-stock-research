@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────
+# SDP Pipeline Resource — nse-stock-research
+# Phase 1a: Bronze layer only
+# ─────────────────────────────────────────────────────────────
+# This file declares the Spark Declarative Pipeline (SDP) as a DABs
+# resource. The pipeline reads raw JSON from the landing volume via
+# Auto Loader and writes bronze tables.
+#
+# The pipeline key `nse_pipeline` is referenced by the ingestion job
+# via ${resources.pipelines.nse_pipeline.id} so the job can trigger
+# a pipeline refresh after ingestion completes.
+#
+# In Phase 1a, only bronze.py exists under pipelines/. In Phase 1b
+# and 1c, silver.py and gold.py will be added to the same folder —
+# the glob ../pipelines/** picks them up automatically, no YAML
+# change needed.
+# ─────────────────────────────────────────────────────────────
+
+resources:
+  pipelines:
+    # Pipeline key — referenced as ${resources.pipelines.nse_pipeline.id}
+    # in the ingestion job YAML.
+    nse_pipeline:
+      name: nse-pipeline
+
+      # Unity Catalog where pipeline tables are published.
+      # Resolves to the `catalog` variable from databricks.yml (nse_stock_research).
+      catalog: ${var.catalog}
+
+      # Schema within the catalog where bronze tables are created.
+      # silver.py and gold.py will publish to their own schemas (silver, gold)
+      # by specifying full table names like nse_stock_research.silver.xxx
+      schema: bronze
+
+      # Serverless compute — Databricks provisions and scales compute
+      # automatically. No cluster configuration needed.
+      serverless: true
+
+      # Triggered mode — the pipeline runs when the ingestion job calls it.
+      # Set to true for continuous (always-on) mode if needed later.
+      continuous: false
+
+      # Photon engine — faster execution for supported operations.
+      photon: true
+
+      # Libraries: all Python files under pipelines/ are loaded as
+      # pipeline source code. In Phase 1a, only bronze.py exists.
+      # Adding silver.py / gold.py later requires no change here.
+      libraries:
+        - glob:
+            include: ../pipelines/**
+
+      # Configuration parameters passed to the pipeline as Spark conf.
+      # bronze.py reads these via spark.conf.get("catalog"), etc.
+      configuration:
+        catalog: ${var.catalog}
+        landing_schema: landing
+        landing_volume: raw_landing
+
+      # Event log table — stores pipeline event logs for monitoring.
+      # The `monitoring` schema must exist (add to bootstrap_catalog.sql
+      # if not already created).
+      event_log:
+        catalog: ${var.catalog}
+        schema: monitoring
+        name: event_log

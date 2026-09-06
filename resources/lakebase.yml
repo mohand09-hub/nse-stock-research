@@ -1,0 +1,10 @@
+resources:
+  postgres_projects:
+    stock_research_lakebase:
+      project_id: nse-stock-research-lakebase
+      pg_version: 17
+      display_name: Stock Research Assistant Lakebase
+      default_endpoint_settings:
+        autoscaling_limit_min_cu: 0.5
+        autoscaling_limit_max_cu: 1.0
+        suspend_timeout_duration: 300s

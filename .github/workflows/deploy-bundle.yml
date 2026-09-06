@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. Check out the repository (Updated to v4)
+      # 1. Check out the repository (Updated to modern v4)
       - name: Checkout code
         uses: actions/checkout@v4
       
@@ -39,7 +39,7 @@ jobs:
         run: |
           databricks bundle deploy --target dev
       
-      # 5. Trigger the market open job after deployment safely
+      # 5. Trigger the market open job after deployment safely using text parsing
       - name: Trigger market open job (optional)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -47,15 +47,15 @@ jobs:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         shell: bash
         run: |
-          # 1. Capture full output (redirecting stderr to stdout to catch all text)
-          SUMMARY_OUTPUT=$(databricks bundle summary --target dev 2>&1)
+          # 1. Capture the human-readable summary text
+          SUMMARY_OUTPUT=$(databricks bundle summary --target dev)
           
-          # 2. Extract only valid JSON object/array lines to pass to jq
-          JOB_ID=$(echo "$SUMMARY_OUTPUT" | grep -E '^\{|^\[' | jq -r '.resources.jobs[] | select(.name | contains("market_open")) | .id' 2>/dev/null || true)
+          # 2. Extract the numeric Job ID out of the URL string under nse_market_open
+          JOB_ID=$(echo "$SUMMARY_OUTPUT" | grep -A 2 "nse_market_open:" | grep "URL:" | sed -E 's|.*/jobs/([0-9]+).*|\1|')
           
-          # 3. Validate the extraction to prevent blank/null API calls
-          if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
-            echo "❌ Error: Failed to extract Job ID from bundle summary."
+          # 3. Validate that a valid numeric ID was found
+          if [ -z "$JOB_ID" ] || ! [[ "$JOB_ID" =~ ^[0-9]+$ ]]; then
+            echo "❌ Error: Failed to extract a valid numeric Job ID from bundle summary."
             echo "=== Databricks Debug Output ==="
             echo "$SUMMARY_OUTPUT"
             exit 1
